@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Вход · Bybit Bot</title>
+  <link rel="stylesheet" href="/static/styles.css?v=12" />
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <div class="login-brand">BYBIT BOT</div>
+    <p class="login-sub">Вход в админку</p>
+    {% if error %}
+    <div class="login-error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login" class="login-form">
+      <label>
+        <span>Пароль</span>
+        <input
+          type="password"
+          name="password"
+          inputmode="numeric"
+          autocomplete="current-password"
+          placeholder="••••"
+          required
+          autofocus
+        />
+      </label>
+      <button type="submit">Войти</button>
+    </form>
+  </main>
+</body>
+</html>

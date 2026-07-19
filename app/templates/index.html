@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Bybit Trading Bot</title>
+  <link rel="stylesheet" href="/static/styles.css?v=12" />
+</head>
+<body>
+  <div class="mobile-topbar">
+    <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Меню">☰</button>
+    <div class="mobile-brand">BYBIT BOT</div>
+    <form method="post" action="/logout" class="logout-form">
+      <button type="submit" class="logout-btn" title="Выйти">⎋</button>
+    </form>
+  </div>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-title">BYBIT BOT</div>
+        <div class="brand-sub">2 канала · Telegram → Futures</div>
+      </div>
+
+      <div class="bot-switch">
+        <button class="bot-btn active" data-bot="bot1">Bot 1</button>
+        <button class="bot-btn" data-bot="bot2">Bot 2</button>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="dashboard">Торговля</button>
+        <button class="nav-btn" data-tab="check">Проверка сигнала</button>
+        <button class="nav-btn" data-tab="test">Тест сделки</button>
+        <button class="nav-btn" data-tab="terminal">Терминал</button>
+        <button class="nav-btn" data-tab="settings">Настройки</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-row">
+          <span>Bot 1</span>
+          <span class="badge {% if settings_map['bot1'].enabled %}on{% else %}off{% endif %}" id="status-bot1">
+            {% if settings_map['bot1'].enabled %}ВКЛ{% else %}ВЫКЛ{% endif %}
+          </span>
+        </div>
+        <div class="status-row">
+          <span>Bot 2</span>
+          <span class="badge {% if settings_map['bot2'].enabled %}on{% else %}off{% endif %}" id="status-bot2">
+            {% if settings_map['bot2'].enabled %}ВКЛ{% else %}ВЫКЛ{% endif %}
+          </span>
+        </div>
+        <div class="status-row">
+          <span>Notify активного</span>
+          <span class="badge off" id="notify-status">...</span>
+        </div>
+        <div class="muted">Обновлено: <span id="sync-time">{{ now.strftime('%d.%m.%Y %H:%M:%S') }}</span></div>
+        <form method="post" action="/logout" class="logout-form desktop-logout">
+          <button type="submit" class="secondary">Выйти</button>
+        </form>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="active-bot-banner">
+        Активный бот: <strong id="active-bot-label">Bot 1</strong>
+        <span class="muted" id="active-channel-label">
+          {% if 'bot1' in channels %}канал {{ channels['bot1'] }}{% endif %}
+        </span>
+      </div>
+
+      <section class="panel active" id="panel-dashboard">
+        <header class="page-header">
+          <h1>Торговля</h1>
+          <p>Открытые позиции и история выбранного бота</p>
+        </header>
+
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-label">Открытых позиций</div>
+            <div class="stat-value" id="open-count">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Маржа</div>
+            <div class="stat-value" id="margin-stat">{{ settings_map['bot1'].margin_usdt }} USDT</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Смещение TP</div>
+            <div class="stat-value" id="tp-stat">{{ settings_map['bot1'].tp_adjust_pct }}%</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Открытые позиции</h2>
+          <div class="table-wrap" id="open-positions">
+            <div class="empty">Загрузка...</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>История закрытых сделок</h2>
+          <div class="table-wrap" id="closed-positions">
+            {% set shown = namespace %}
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Бот</th>
+                  <th>Пара</th>
+                  <th>Сторона</th>
+                  <th>Вход</th>
+                  <th>PnL</th>
+                  <th>Дата</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in closed_positions %}
+                <tr class="closed-row" data-bot="{{ p.bot_id }}">
+                  <td>#{{ p.id }}</td>
+                  <td>{{ p.bot_id }}</td>
+                  <td><strong>{{ p.symbol }}</strong></td>
+                  <td>{{ p.side }}</td>
+                  <td>{{ p.entry_price }}</td>
+                  <td>{{ p.realized_pnl }}</td>
+                  <td>{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                </tr>
+                {% else %}
+                {% set shown = true %}
+                {% endfor %}
+              </tbody>
+            </table>
+            {% if not closed_positions %}
+            <div class="empty">Закрытых сделок пока нет</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-check">
+        <header class="page-header row-between">
+          <div>
+            <h1>Проверка сигнала</h1>
+            <p>Последний сигнал выбранного бота</p>
+          </div>
+          <button type="button" class="btn" id="refresh-channel-btn">Обновить из канала</button>
+        </header>
+        <div id="last-channel-signal" class="section">
+          <div class="empty">Загрузка...</div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-test">
+        <header class="page-header">
+          <h1>Тест сделки</h1>
+          <p>Реальная сделка от имени выбранного бота</p>
+        </header>
+
+        <div class="section settings-card">
+          <h2>По последнему сигналу</h2>
+          <p class="muted section-desc">Откроет сделку по последнему сигналу выбранного бота</p>
+          <button type="button" class="btn" id="test-last-signal-btn">Открыть по последнему сигналу</button>
+          <div id="test-last-result" class="notify-message" style="display:none;"></div>
+        </div>
+
+        <div class="section settings-card">
+          <h2>Свои параметры</h2>
+          <form id="manual-trade-form" class="settings-form">
+            <label>
+              <span>Тикер</span>
+              <input id="m_symbol" type="text" placeholder="BTC" required />
+            </label>
+            <label>
+              <span>Направление</span>
+              <select id="m_side">
+                <option value="LONG">LONG</option>
+                <option value="SHORT">SHORT</option>
+              </select>
+            </label>
+            <label>
+              <span>Плечо</span>
+              <input id="m_leverage" type="number" step="1" value="10" required />
+            </label>
+            <label>
+              <span>Маржа (USDT)</span>
+              <input id="m_margin" type="number" step="0.1" value="10" required />
+            </label>
+            <label>
+              <span>Take Profit</span>
+              <input id="m_tp" type="number" step="0.0000001" required />
+            </label>
+            <label>
+              <span>Stop Loss</span>
+              <input id="m_sl" type="number" step="0.0000001" required />
+            </label>
+            <button type="submit" class="btn">Открыть тестовую сделку</button>
+          </form>
+          <div id="test-manual-result" class="notify-message" style="display:none;"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-terminal">
+        <header class="page-header row-between">
+          <div>
+            <h1>Терминал</h1>
+            <p>Логи bot1 / bot2 / system</p>
+          </div>
+          <button type="button" class="btn ghost" id="clear-terminal-btn">Очистить экран</button>
+        </header>
+        <div class="terminal" id="terminal">
+          <div class="terminal-line muted">Ожидание логов...</div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-settings">
+        <header class="page-header">
+          <h1>Настройки</h1>
+          <p>Отдельные настройки для активного бота</p>
+        </header>
+
+        <div class="section settings-card">
+          <h2>Бот уведомлений</h2>
+          <div id="notify-bot-status" class="notify-status-box">
+            <div class="empty">Загрузка...</div>
+          </div>
+        </div>
+
+        <div class="section settings-card">
+          <h2>ИИ (ChatGPT)</h2>
+          <p class="muted section-desc">
+            Разбирает follow-up в канале: «закройте LINK», «стоп в бу», перенос SL/TP.
+            Bot 2 — включён, Bot 1 — выключен по умолчанию.
+          </p>
+          <div class="row" style="margin-bottom: 10px;">
+            <button type="button" class="secondary" id="ai-test-btn" onclick="testAi()">Проверить AI</button>
+          </div>
+          <div id="ai-status-box" class="notify-status-box">
+            <div class="empty">Загрузка...</div>
+          </div>
+          <form id="settings-form" class="settings-form" style="margin-top:18px;">
+            <input type="hidden" id="settings_bot_id" value="bot1" />
+            <label class="toggle-row">
+              <input type="checkbox" id="enabled" {% if settings_map['bot1'].enabled %}checked{% endif %}/>
+              <span>Бот включён и открывает сделки</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="ai_enabled" {% if settings_map['bot1'].ai_enabled %}checked{% endif %}/>
+              <span>ИИ follow-up включён для этого бота</span>
+            </label>
+            <label>
+              <span>Маржа на одну сделку (USDT)</span>
+              <input id="margin_usdt" type="number" step="0.1" value="{{ settings_map['bot1'].margin_usdt }}" />
+            </label>
+            <label>
+              <span>Смещение TP1 от сигнала (%)</span>
+              <input id="tp_adjust_pct" type="number" step="0.01" value="{{ settings_map['bot1'].tp_adjust_pct }}" />
+            </label>
+            <label>
+              <span>Минимальное плечо сигнала</span>
+              <input id="min_leverage" type="number" step="1" min="1" value="{{ settings_map['bot1'].min_leverage | default(1) }}" />
+            </label>
+            <label>
+              <span>Закрывать на TP1 (% позиции)</span>
+              <input id="close_at_tp1_pct" type="number" step="1" value="{{ settings_map['bot1'].close_at_tp1_pct }}" />
+            </label>
+            <button type="submit" class="btn">Сохранить настройки</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.BOT_CHANNELS = {{ channels | tojson }};
+    window.BOT_SETTINGS = {
+      bot1: {
+        enabled: {{ settings_map['bot1'].enabled | tojson }},
+        margin_usdt: {{ settings_map['bot1'].margin_usdt }},
+        tp_adjust_pct: {{ settings_map['bot1'].tp_adjust_pct }},
+        close_at_tp1_pct: {{ settings_map['bot1'].close_at_tp1_pct }},
+        min_leverage: {{ settings_map['bot1'].min_leverage | default(1) }},
+        ai_enabled: {{ settings_map['bot1'].ai_enabled | default(false) | tojson }}
+      },
+      bot2: {
+        enabled: {{ settings_map['bot2'].enabled | tojson }},
+        margin_usdt: {{ settings_map['bot2'].margin_usdt }},
+        tp_adjust_pct: {{ settings_map['bot2'].tp_adjust_pct }},
+        close_at_tp1_pct: {{ settings_map['bot2'].close_at_tp1_pct }},
+        min_leverage: {{ settings_map['bot2'].min_leverage | default(1) }},
+        ai_enabled: {{ settings_map['bot2'].ai_enabled | default(false) | tojson }}
+      }
+    };
+  </script>
+  <script src="/static/app.js?v=12"></script>
+</body>
+</html>

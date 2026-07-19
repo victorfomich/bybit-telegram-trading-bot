@@ -1,8 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "app/main.py": {
-      "maxDuration": 60
+  "redirects": [
+    {
+      "source": "/:path*",
+      "destination": "http://201.51.5.121:8000/:path*",
+      "permanent": false
     }
-  }
+  ]
 }

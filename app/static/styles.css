@@ -532,8 +532,17 @@ select:focus {
   flex-shrink: 0;
 }
 
-.logout-form {
-  margin: 0;
+.live-pill {
+  display: none;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: 1px solid #3a3a3a;
+  color: #b7ffb7;
+  background: #102010;
+  flex-shrink: 0;
 }
 
 .desktop-logout {
@@ -691,6 +700,10 @@ body.menu-open {
     font-size: 0.88rem;
     min-height: 40px;
     border-radius: 10px;
+  }
+
+  .live-pill {
+    display: inline-flex;
   }
 
   .mobile-bottom-nav {

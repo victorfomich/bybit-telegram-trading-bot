@@ -484,9 +484,32 @@ window.fetch = async (...args) => {
 initMobileMenu();
 initBotSwitch();
 initTabs();
-setActiveBot("bot1");
-refreshLogs(true);
-refreshNotifyStatus();
+
+async function bootstrapUi() {
+  try {
+    for (const botId of ["bot1", "bot2"]) {
+      const res = await fetch(`/api/settings?bot_id=${botId}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      window.BOT_SETTINGS = window.BOT_SETTINGS || {};
+      window.BOT_SETTINGS[botId] = {
+        enabled: !!data.enabled,
+        margin_usdt: data.margin_usdt,
+        tp_adjust_pct: data.tp_adjust_pct,
+        close_at_tp1_pct: data.close_at_tp1_pct,
+        min_leverage: data.min_leverage ?? 1,
+        ai_enabled: !!data.ai_enabled,
+      };
+    }
+  } catch (e) {
+    // ignore, use embedded defaults
+  }
+  setActiveBot("bot1");
+  refreshLogs(true);
+  refreshNotifyStatus();
+}
+
+bootstrapUi();
 
 setInterval(() => {
   const dashboard = document.getElementById("panel-dashboard");

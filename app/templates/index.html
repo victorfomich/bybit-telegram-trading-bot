@@ -2,19 +2,34 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>Bybit Trading Bot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=12" />
+  <link rel="stylesheet" href="/static/styles.css?v=13" />
 </head>
 <body>
   <div class="mobile-topbar">
-    <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Меню">☰</button>
-    <div class="mobile-brand">BYBIT BOT</div>
+    <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Меню">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="mobile-bot-switch" id="mobile-bot-switch">
+      <button type="button" class="bot-btn active" data-bot="bot1">Bot 1</button>
+      <button type="button" class="bot-btn" data-bot="bot2">Bot 2</button>
+    </div>
     <form method="post" action="/logout" class="logout-form">
       <button type="submit" class="logout-btn" title="Выйти">⎋</button>
     </form>
   </div>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Разделы">
+    <button type="button" class="mnav-btn active" data-tab="dashboard"><span>📈</span>Торговля</button>
+    <button type="button" class="mnav-btn" data-tab="check"><span>✓</span>Сигнал</button>
+    <button type="button" class="mnav-btn" data-tab="test"><span>⚡</span>Тест</button>
+    <button type="button" class="mnav-btn" data-tab="terminal"><span>>_</span>Лог</button>
+    <button type="button" class="mnav-btn" data-tab="settings"><span>⚙</span>Ещё</button>
+  </nav>
 
   <div class="layout">
     <aside class="sidebar" id="sidebar">
@@ -23,12 +38,12 @@
         <div class="brand-sub">2 канала · Telegram → Futures</div>
       </div>
 
-      <div class="bot-switch">
+      <div class="bot-switch desktop-bot-switch">
         <button class="bot-btn active" data-bot="bot1">Bot 1</button>
         <button class="bot-btn" data-bot="bot2">Bot 2</button>
       </div>
 
-      <nav class="nav">
+      <nav class="nav desktop-nav">
         <button class="nav-btn active" data-tab="dashboard">Торговля</button>
         <button class="nav-btn" data-tab="check">Проверка сигнала</button>
         <button class="nav-btn" data-tab="test">Тест сделки</button>
@@ -128,6 +143,23 @@
                 {% endfor %}
               </tbody>
             </table>
+            <div class="mobile-cards" id="closed-mobile-cards">
+              {% for p in closed_positions %}
+              <div class="pos-card closed-card" data-bot="{{ p.bot_id }}">
+                <div class="pos-card-top">
+                  <div class="pos-card-sym">{{ p.symbol }}</div>
+                  <div class="badge">{{ p.side }}</div>
+                </div>
+                <div class="pos-card-grid">
+                  <div><span>ID</span><strong>#{{ p.id }}</strong></div>
+                  <div><span>Бот</span><strong>{{ p.bot_id }}</strong></div>
+                  <div><span>Вход</span><strong>{{ p.entry_price }}</strong></div>
+                  <div><span>PnL</span><strong>{{ p.realized_pnl }}</strong></div>
+                  <div><span>Дата</span><strong>{{ p.created_at.strftime('%d.%m %H:%M') }}</strong></div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
             {% if not closed_positions %}
             <div class="empty">Закрытых сделок пока нет</div>
             {% endif %}
@@ -289,6 +321,6 @@
       }
     };
   </script>
-  <script src="/static/app.js?v=12"></script>
+  <script src="/static/app.js?v=13"></script>
 </body>
 </html>

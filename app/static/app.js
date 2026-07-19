@@ -43,7 +43,7 @@ function setActiveBot(botId) {
     if (tpStat) tpStat.textContent = `${st.tp_adjust_pct}%`;
   }
 
-  document.querySelectorAll(".closed-row").forEach((row) => {
+  document.querySelectorAll(".closed-row, .closed-card").forEach((row) => {
     row.style.display = row.getAttribute("data-bot") === botId ? "" : "none";
   });
 
@@ -58,22 +58,27 @@ function initBotSwitch() {
   });
 }
 
-function initTabs() {
-  const buttons = document.querySelectorAll(".nav-btn");
-  const panels = document.querySelectorAll(".panel");
+function setActiveTab(tab) {
+  document.querySelectorAll(".nav-btn, .mnav-btn").forEach((b) => {
+    b.classList.toggle("active", b.getAttribute("data-tab") === tab);
+  });
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  document.getElementById(`panel-${tab}`)?.classList.add("active");
 
-  buttons.forEach((btn) => {
+  if (tab === "terminal") refreshLogs(true);
+  if (tab === "check") refreshLastChannelSignal(false);
+  if (tab === "dashboard") refreshOpenPositions();
+  if (tab === "settings") refreshNotifyStatus();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function initTabs() {
+  document.querySelectorAll(".nav-btn, .mnav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-tab");
-      buttons.forEach((b) => b.classList.remove("active"));
-      panels.forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById(`panel-${tab}`)?.classList.add("active");
-
-      if (tab === "terminal") refreshLogs(true);
-      if (tab === "check") refreshLastChannelSignal(false);
-      if (tab === "dashboard") refreshOpenPositions();
-      if (tab === "settings") refreshNotifyStatus();
+      setActiveTab(tab);
+      if (window.matchMedia("(max-width: 900px)").matches) closeMobileMenu();
     });
   });
 }
@@ -277,6 +282,28 @@ async function refreshOpenPositions() {
     return;
   }
 
+  const cards = positions
+    .map(
+      (p) => `
+    <div class="pos-card">
+      <div class="pos-card-top">
+        <div class="pos-card-sym">${p.symbol}</div>
+        <div class="badge">${p.side} · x${p.leverage}</div>
+      </div>
+      <div class="pos-card-grid">
+        <div><span>Объём</span><strong>${p.qty}${p.pending_limit_qty ? ` +L ${p.pending_limit_qty}` : ""}</strong></div>
+        <div><span>Статус</span><strong>${p.status || "OPEN"}</strong></div>
+        <div><span>Вход</span><strong>${p.entry_price}</strong></div>
+        <div><span>PnL</span><strong class="pnl">${p.unrealized_pnl}</strong></div>
+        <div><span>TP</span><strong>${p.tp_price}</strong></div>
+        <div><span>SL</span><strong>${p.sl_price}</strong></div>
+        <div><span>Прогноз TP</span><strong>${Number(p.tp_projection_usdt).toFixed(2)}</strong></div>
+        <div><span>Прогноз SL</span><strong>${Number(p.sl_projection_usdt).toFixed(2)}</strong></div>
+      </div>
+    </div>`
+    )
+    .join("");
+
   wrapper.innerHTML = `
     <table>
       <thead>
@@ -316,7 +343,8 @@ async function refreshOpenPositions() {
           )
           .join("")}
       </tbody>
-    </table>`;
+    </table>
+    <div class="mobile-cards">${cards}</div>`;
   updateSyncTime();
 }
 
@@ -442,12 +470,6 @@ function initMobileMenu() {
     document.body.classList.toggle("menu-open", open);
   });
   backdrop?.addEventListener("click", closeMobileMenu);
-
-  document.querySelectorAll(".nav-btn, .bot-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (window.matchMedia("(max-width: 1100px)").matches) closeMobileMenu();
-    });
-  });
 }
 
 const _fetch = window.fetch.bind(window);

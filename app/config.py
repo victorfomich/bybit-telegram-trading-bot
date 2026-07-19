@@ -1,5 +1,14 @@
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+
+
+def is_serverless() -> bool:
+    return bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("VERCEL_ENV")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    )
 
 
 class Settings(BaseSettings):
@@ -71,6 +80,16 @@ class Settings(BaseSettings):
         if value is None or value == "" or value == "None":
             return None
         return value
+
+    @model_validator(mode="after")
+    def serverless_overrides(self):
+        # На Vercel файловая система только /tmp доступна для записи
+        if is_serverless():
+            if self.database_url.startswith("sqlite:///./") or self.database_url.endswith("bot.db"):
+                self.database_url = "sqlite:////tmp/bot.db"
+            if not str(self.telegram_session_name).startswith("/tmp/"):
+                self.telegram_session_name = f"/tmp/{self.telegram_session_name}"
+        return self
 
 
 settings = Settings()

@@ -1,5 +1,7 @@
 import asyncio
+import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -15,7 +17,7 @@ from app.auth import (
     make_auth_token,
     require_auth_middleware,
 )
-from app.config import BOT_IDS, BOT_LABELS, settings
+from app.config import BOT_IDS, BOT_LABELS, is_serverless, settings
 from app.db import SessionLocal, get_db
 from app.models import Position, ensure_schema
 from app.schemas import ManualTradeRequest, ParsedSignal, UpdatePositionTpRequest, UpdateSettingsRequest
@@ -31,10 +33,15 @@ from app.services.notify_bot import NotifyBot, run_notify_bot_in_background
 from app.services.telegram_listener import MultiChannelTelegramListener, run_listener_in_background
 from app.services.trade_engine import TradeEngine
 
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+TEMPLATES_DIR = BASE_DIR / "templates"
+SERVERLESS = is_serverless()
+
 app = FastAPI(title="Telegram Bybit Futures Bot")
 app.middleware("http")(require_auth_middleware)
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 ensure_schema()
 
@@ -58,7 +65,14 @@ channels: dict[str, int] = {"bot1": settings.telegram_channel_id}
 if settings.telegram_channel_id_2:
     channels["bot2"] = settings.telegram_channel_id_2
 
-tg_listener = MultiChannelTelegramListener(trade_engine, channels)
+# Telethon session нельзя создавать на read-only FS Vercel
+tg_listener: MultiChannelTelegramListener | None = None
+if not SERVERLESS:
+    tg_listener = MultiChannelTelegramListener(trade_engine, channels)
+
+
+def _cookie_secure() -> bool:
+    return SERVERLESS or os.environ.get("COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
 
 
 def _validate_bot_id(bot_id: str) -> str:
@@ -71,7 +85,15 @@ def _validate_bot_id(bot_id: str) -> str:
 async def startup() -> None:
     setup_bot_logging()
     log_event("INFO", "system", "Сервер запущен")
-    log_event("INFO", "system", f"Админка: http://{settings.app_host}:{settings.app_port}")
+    if SERVERLESS:
+        log_event(
+            "WARN",
+            "system",
+            "Vercel/serverless режим: Telegram listener и фоновые боты отключены. "
+            "Админка доступна, автоторговля только на VPS/локально.",
+        )
+    else:
+        log_event("INFO", "system", f"Админка: http://{settings.app_host}:{settings.app_port}")
 
     db = SessionLocal()
     try:
@@ -80,7 +102,11 @@ async def startup() -> None:
     finally:
         db.close()
 
-    run_listener_in_background(tg_listener)
+    if SERVERLESS:
+        return
+
+    if tg_listener is not None:
+        run_listener_in_background(tg_listener)
     for bot_id, nb in notify_bots.items():
         if nb.is_configured:
             run_notify_bot_in_background(nb)
@@ -131,7 +157,7 @@ async def login_submit(request: Request, password: str = Form(...)):
         max_age=AUTH_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=_cookie_secure(),
     )
     return response
 
@@ -152,7 +178,7 @@ async def api_login(request: Request):
         max_age=AUTH_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=_cookie_secure(),
     )
     return response
 
@@ -281,7 +307,7 @@ def get_open_positions(bot_id: str | None = None, db: Session = Depends(get_db))
 async def get_last_signal(bot_id: str = Query("bot1"), db: Session = Depends(get_db)):
     bot_id = _validate_bot_id(bot_id)
     msg = get_last_signal_message(db, bot_id)
-    if not msg:
+    if not msg and tg_listener is not None:
         try:
             await tg_listener.fetch_last_channel_signal(bot_id)
             msg = get_last_signal_message(db, bot_id)
@@ -297,6 +323,11 @@ async def refresh_channel_signal(bot_id: str = Query("bot1"), db: Session = Depe
     bot_id = _validate_bot_id(bot_id)
     if bot_id not in channels:
         raise HTTPException(status_code=400, detail=f"Канал для {bot_id} не настроен в .env")
+    if tg_listener is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Telegram listener недоступен на Vercel. Запусти бота на VPS/локально.",
+        )
     try:
         await tg_listener.fetch_last_channel_signal(bot_id)
     except Exception as exc:
@@ -309,7 +340,7 @@ async def refresh_channel_signal(bot_id: str = Query("bot1"), db: Session = Depe
 async def test_trade_from_last_signal(bot_id: str = Query("bot1"), db: Session = Depends(get_db)):
     bot_id = _validate_bot_id(bot_id)
     msg = get_last_signal_message(db, bot_id)
-    if not msg:
+    if not msg and tg_listener is not None:
         try:
             await tg_listener.fetch_last_channel_signal(bot_id)
             msg = get_last_signal_message(db, bot_id)
@@ -404,6 +435,8 @@ def health():
         "bots": list(channels.keys()),
         "channels": channels,
         "ai_configured": ai_manager.is_configured,
+        "serverless": SERVERLESS,
+        "listener_enabled": tg_listener is not None,
     }
 
 

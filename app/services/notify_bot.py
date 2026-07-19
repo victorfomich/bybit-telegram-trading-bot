@@ -19,7 +19,12 @@ class NotifyBot:
         self._running = False
         self._last_error: str | None = None
         self._offset = 0
-        self._state_file = Path(__file__).resolve().parent.parent.parent / f"notify_state_{bot_id}.json"
+        from app.config import is_serverless
+
+        if is_serverless():
+            self._state_file = Path(f"/tmp/notify_state_{bot_id}.json")
+        else:
+            self._state_file = Path(__file__).resolve().parent.parent.parent / f"notify_state_{bot_id}.json"
         self._load_state()
 
     def _api_url(self, method: str) -> str:

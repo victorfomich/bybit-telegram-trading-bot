@@ -19,8 +19,6 @@ pip install -r requirements.txt
 python -m app.main
 ```
 
-Админка: [http://localhost:8000](http://localhost:8000)  
-Пароль входа: `1958`
 
 ## Что есть
 
